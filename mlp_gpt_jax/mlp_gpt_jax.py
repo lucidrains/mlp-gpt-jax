@@ -22,9 +22,6 @@ class gMLP(nn.Module):
 class SGU(nn.Module):
     seq_len: int
 
-    def setup(self):
-        return
-
     @nn.compact
     def __call__(self, x):
         n = self.seq_len
@@ -34,9 +31,8 @@ class SGU(nn.Module):
         weights = self.param('spatial_weights', init.uniform(scale = 1e-3 // n), (n, n))
         bias = self.param('spatial_bias', init.ones, (n, 1))
 
-        tri_mask = np.ones((n, n))
-        causal_mask = np.triu(tri_mask, 1)
-        weights *= causal_mask
+        mask = np.tril(np.ones((n, n)))
+        weights = weights * mask
 
         gate = np.einsum('n d, m n -> m d', gate, weights)
         gate = gate + bias
