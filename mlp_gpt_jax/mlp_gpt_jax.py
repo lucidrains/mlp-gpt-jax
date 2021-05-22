@@ -9,34 +9,37 @@ class gMLP(nn.Module):
     dim: int
     seq_len: int
     dim_ff: int
+    heads: int
 
     @nn.compact
     def __call__(self, x):
         x = nn.LayerNorm()(x)
         x = nn.Dense(features = self.dim_ff)(x)
         x = nn.gelu(x)
-        x = SGU(seq_len = self.seq_len)(x)
+        x = SGU(seq_len = self.seq_len, heads = self.heads)(x)
         x = nn.Dense(features = self.dim)(x)
         return x
 
 class SGU(nn.Module):
     seq_len: int
+    heads: int
 
     @nn.compact
     def __call__(self, x):
-        n = self.seq_len
+        n, h = self.seq_len, self.heads
         x, gate = np.split(x, 2, axis = -1)
         gate = nn.LayerNorm()(gate)
 
-        weights = self.param('spatial_weights', init.uniform(scale = 1e-3 // n), (n, n))
-        bias = self.param('spatial_bias', init.ones, (n, 1))
+        weights = self.param('spatial_weights', init.uniform(scale = 1e-3 // n), (h, n, n))
+        bias = self.param('spatial_bias', init.ones, (n, h, 1))
 
         mask = np.tril(np.ones((n, n)))
-        weights = weights * mask
+        weights = weights * rearrange(mask, 'm n -> () m n')
 
-        gate = np.einsum('n d, m n -> m d', gate, weights)
+        gate = rearrange(gate, 'n (h d) -> n h d', h = h)
+        gate = np.einsum('n h d, h m n -> m h d', gate, weights)
         gate = gate + bias
-
+        gate = rearrange(gate, 'n h d -> n (h d)')
         return x * gate
 
 class MLPGpt(nn.Module):
@@ -44,10 +47,11 @@ class MLPGpt(nn.Module):
     dim: int
     seq_len: int
     depth: int
+    heads: int = 1
     ff_mult: int = 4
 
     def setup(self):
-        self.layers = [gMLP(dim = self.dim, dim_ff = self.dim * self.ff_mult, seq_len = self.seq_len) for _ in range(self.depth)]
+        self.layers = [gMLP(dim = self.dim, dim_ff = self.dim * self.ff_mult, seq_len = self.seq_len, heads = self.heads) for _ in range(self.depth)]
 
     @nn.compact
     def __call__(self, x):
