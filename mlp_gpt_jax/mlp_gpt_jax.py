@@ -10,19 +10,21 @@ class gMLP(nn.Module):
     seq_len: int
     dim_ff: int
     heads: int
+    clamp_gate: bool
 
     @nn.compact
     def __call__(self, x):
         x = nn.LayerNorm()(x)
         x = nn.Dense(features = self.dim_ff)(x)
         x = nn.gelu(x)
-        x = SGU(seq_len = self.seq_len, heads = self.heads)(x)
+        x = SGU(seq_len = self.seq_len, heads = self.heads, clamp_gate = self.clamp_gate)(x)
         x = nn.Dense(features = self.dim)(x)
         return x
 
 class SGU(nn.Module):
     seq_len: int
     heads: int
+    clamp_gate: bool
 
     @nn.compact
     def __call__(self, x):
@@ -40,6 +42,8 @@ class SGU(nn.Module):
         gate = np.einsum('n h d, h m n -> m h d', gate, weights)
         gate = gate + bias
         gate = rearrange(gate, 'n h d -> n (h d)')
+
+        gate = np.tanh(gate) if self.clamp_gate else gate
         return x * gate
 
 class MLPGpt(nn.Module):
@@ -49,9 +53,10 @@ class MLPGpt(nn.Module):
     depth: int
     heads: int = 1
     ff_mult: int = 4
+    clamp_gate: bool = True
 
     def setup(self):
-        self.layers = [gMLP(dim = self.dim, dim_ff = self.dim * self.ff_mult, seq_len = self.seq_len, heads = self.heads) for _ in range(self.depth)]
+        self.layers = [gMLP(dim = self.dim, dim_ff = self.dim * self.ff_mult, seq_len = self.seq_len, heads = self.heads, clamp_gate = self.clamp_gate) for _ in range(self.depth)]
 
     @nn.compact
     def __call__(self, x):
