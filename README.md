@@ -30,6 +30,22 @@ params = gpt.init(key, seq)
 logits = gpt.apply(params, seq) # (512, 20000)
 ```
 
+You can also use the "tiny" attention mentioned in the paper, by setting the `attn_dim` keyword argument. 64 is recommended if you choose to add the tiny attention.
+
+```python
+from mlp_gpt_jax import MLPGpt
+
+gpt = MLPGpt(
+    num_tokens = 20000,
+    dim = 512,
+    depth = 6,
+    seq_len = 512,
+    attn_dim = 64          # one-headed attention of dimension 64, per paper
+)
+```
+
+```
+
 ## Citations
 
 ```bibtex
