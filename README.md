@@ -1,4 +1,4 @@
-## MLP GPT - Jax (wip)
+## MLP GPT - Jax
 
 A GPT, made only of MLPs, in Jax. The specific MLP to be used are <a href="https://arxiv.org/abs/2105.08050">gMLPs</a> with the Spatial Gating Units.
 
@@ -42,8 +42,6 @@ gpt = MLPGpt(
     seq_len = 512,
     attn_dim = 64          # one-headed attention of dimension 64, per paper
 )
-```
-
 ```
 
 ## Citations
