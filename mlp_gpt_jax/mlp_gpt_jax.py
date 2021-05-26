@@ -49,7 +49,7 @@ class Attention(nn.Module):
     def __call__(self, x):
         n = self.seq_len
         scale = self.dim_head ** -0.5
-        qkv = nn.Dense(features = self.dim_head * 3)(x)
+        qkv = nn.Dense(features = self.dim_head * 3, use_bias = False)(x)
         q, k, v = np.split(qkv, 3, axis = -1)
         sim = np.einsum('i d, j d -> i j', q, k) * scale
 
