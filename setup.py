@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 setup(
     name="mlp-gpt-jax",
     packages=find_packages(),
-    version="0.0.6",
+    version="0.0.7",
     license="MIT",
     description="MLP GPT - Jax",
     author="Phil Wang",
@@ -14,7 +14,7 @@ setup(
         "deep learning",
         "language model",
         "multilayered-perceptron",
-        "jax",
+        "jax"
     ],
     install_requires=[
         "click",
@@ -25,6 +25,7 @@ setup(
         "jaxlib",
         "optax",
         "torch",
+        "tqdm"
     ],
     classifiers=[
         "Development Status :: 4 - Beta",
