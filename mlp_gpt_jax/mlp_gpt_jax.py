@@ -72,7 +72,7 @@ class SGU(nn.Module):
         x, gate = np.split(x, 2, axis = -1)
         gate = nn.LayerNorm()(gate)
 
-        weights = self.param('spatial_weights', init.uniform(scale = 1e-3 // n), (h, n, n))
+        weights = self.param('spatial_weights', init.uniform(scale = 1e-3 / n), (h, n, n))
         bias = self.param('spatial_bias', init.ones, (n, h, 1))
 
         mask = np.tril(np.ones((n, n)))
