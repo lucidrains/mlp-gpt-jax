@@ -21,6 +21,7 @@ setup(
         "click-option-group",
         "einops>=0.3",
         "flax",
+        "dm-haiku @ git+ssh://git@github.com/deepmind/dm-haiku.git",
         "jax",
         "jaxlib",
         "optax",
