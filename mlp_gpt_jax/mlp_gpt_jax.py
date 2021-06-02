@@ -160,3 +160,9 @@ class MLPGpt(hk.Module):
             x = layer(x) + x
 
         return self.to_logits(x)
+
+def TransformedMLPGpt(**kwargs):
+    @hk.transform
+    def inner(seq):
+        return MLPGpt(**kwargs)(seq)
+    return inner

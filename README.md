@@ -15,16 +15,14 @@ $ pip install mlp-gpt-jax
 ```python
 from jax import random
 from haiku import transform
-from mlp_gpt_jax import MLPGpt
+from mlp_gpt_jax import TransformedMLPGpt
 
-@transform
-def model(seq):
-    return MLPGpt(
-        num_tokens = 20000,
-        dim = 512,
-        depth = 6,
-        seq_len = 1024
-    )(seq)
+model = TransformedMLPGpt(
+    num_tokens = 20000,
+    dim = 512,
+    depth = 6,
+    seq_len = 1024
+)
 
 key = random.PRNGKey(0)
 seq = random.randint(key, (1024,), 0, 20000)
@@ -38,17 +36,15 @@ To use the tiny attention (also made autoregressive with a causal mask), just se
 ```python
 from jax import random
 from haiku import transform
-from mlp_gpt_jax import MLPGpt
+from mlp_gpt_jax import TransformedMLPGpt
 
-@transform
-def model(seq):
-    return MLPGpt(
-        num_tokens = 20000,
-        dim = 512,
-        depth = 6,
-        seq_len = 1024,
-        attn_dim = 64     # set this to 64
-    )(seq)
+model = TransformedMLPGpt(
+    num_tokens = 20000,
+    dim = 512,
+    depth = 6,
+    seq_len = 1024,
+    attn_dim = 64     # set this to 64
+)
 
 key = random.PRNGKey(0)
 seq = random.randint(key, (1024,), 0, 20000)

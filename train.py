@@ -11,7 +11,7 @@ from jax import value_and_grad, vmap, jit, random
 from optax import adam, clip_by_global_norm, chain, apply_updates, apply_every
 
 import haiku as hk
-from mlp_gpt_jax import MLPGpt
+from mlp_gpt_jax import MLPGpt, TransformedMLPGpt
 
 # constants
 
@@ -64,16 +64,14 @@ val_loader    = cycle(DataLoader(val_dataset, batch_size = BATCH_SIZE))
 
 # setup model and params
 
-@hk.transform
-def model(seq):
-    return MLPGpt(
-        num_tokens = 256,
-        dim = 512,
-        seq_len = SEQ_LEN,
-        depth = 8,
-        attn_dim = 32,
-        layer_survival_prob = 0.95
-    )(seq)
+model = TransformedMLPGpt(
+    num_tokens = 256,
+    dim = 512,
+    seq_len = SEQ_LEN,
+    depth = 8,
+    attn_dim = 32,
+    layer_survival_prob = 0.95
+)
 
 key = random.PRNGKey(0)
 params = model.init(key, train_dataset[0][:-1])
