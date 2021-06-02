@@ -11,7 +11,7 @@ from jax import value_and_grad, vmap, jit, random
 from optax import adam, clip_by_global_norm, chain, apply_updates, apply_every
 
 import haiku as hk
-from mlp_gpt_jax.haiku import MLPGpt
+from mlp_gpt_jax import MLPGpt
 
 # constants
 
