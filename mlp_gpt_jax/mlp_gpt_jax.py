@@ -1,115 +1,117 @@
-import jax
-from jax import numpy as np
-import jax.nn.initializers as init
+from functools import partial
 
-from flax import linen as nn
+import jax
+from jax import random
+from jax import nn
+import jax.numpy as np
+
+import haiku as hk
 from einops import rearrange
 
-# constants
+# helpers
 
-ATTN_MASK_VALUE = -1e10
-
-# helper functions
-
-def exists(val):
-    return val is not None
+LayerNorm = partial(hk.LayerNorm, create_scale = True, create_offset = True)
 
 # classes
 
-class gMLP(nn.Module):
-    dim: int
-    seq_len: int
-    dim_ff: int
-    heads: int
-    clamp_gate: bool
-    attn_dim: int = None
+class SGU(hk.Module):
+    def __init__(
+        self,
+        *,
+        dim,
+        dim_out,
+        seq_len
+    ):
+        super().__init__()
+        self.seq_len = seq_len
+        self.norm = LayerNorm(axis = -1)
+        self.proj_out = hk.Linear(dim_out)
 
-    def setup(self):
-        self.attn = Attention(dim = self.dim, dim_head = self.attn_dim, dim_out = self.dim_ff // 2, seq_len = self.seq_len) if exists(self.attn_dim) else None
-
-    @nn.compact
-    def __call__(self, x_):
-        x = nn.LayerNorm()(x_)
-        x = nn.Dense(features = self.dim_ff)(x)
-        x = nn.gelu(x)
-
-        gate_res = self.attn(x_) if exists(self.attn) else None
-
-        x = SGU(seq_len = self.seq_len, heads = self.heads, clamp_gate = self.clamp_gate)(x, gate_res)
-        x = nn.Dense(features = self.dim)(x)
-        return x
-
-class Attention(nn.Module):
-    dim: int
-    dim_head: int
-    dim_out: int
-    seq_len: int
-
-    @nn.compact
     def __call__(self, x):
         n = self.seq_len
-        scale = self.dim_head ** -0.5
-        qkv = nn.Dense(features = self.dim_head * 3, use_bias = False)(x)
-        q, k, v = np.split(qkv, 3, axis = -1)
-        sim = np.einsum('i d, j d -> i j', q, k) * scale
-
-        mask = np.tril(np.ones((n, n)))
-        sim = np.where(mask, sim, ATTN_MASK_VALUE)
-
-        attn = nn.softmax(sim, axis = -1)
-        out = np.einsum('i j, j d -> i d', attn, v)
-        out = nn.Dense(features = self.dim_out)(out)
-        return out
-
-class SGU(nn.Module):
-    seq_len: int
-    heads: int
-    clamp_gate: bool
-
-    @nn.compact
-    def __call__(self, x, gate_res = None):
-        n, h = self.seq_len, self.heads
         x, gate = np.split(x, 2, axis = -1)
-        gate = nn.LayerNorm()(gate)
 
-        weights = self.param('spatial_weights', init.uniform(scale = 1e-3 / n), (h, n, n))
-        bias = self.param('spatial_bias', init.ones, (n, h, 1))
+        weights = hk.get_parameter('spatial_weights', shape = (n, n), init = np.zeros)
+        biases = hk.get_parameter('spatial_biases', shape = (n,), init = np.ones)
 
         mask = np.tril(np.ones((n, n)))
-        weights = weights * rearrange(mask, 'm n -> () m n')
+        weights = weights * mask
 
-        gate = rearrange(gate, 'n (h d) -> n h d', h = h)
-        gate = np.einsum('n h d, h m n -> m h d', gate, weights)
-        gate = gate + bias
-        gate = rearrange(gate, 'n h d -> n (h d)')
+        gate = np.einsum('n d, m n -> m d', gate, weights)
+        gate = gate + rearrange(biases, 'n -> n ()')
 
-        if exists(gate_res):
-            gate = gate + gate_res
+        x = x * gate
+        return self.proj_out(x)
 
-        gate = np.tanh(gate) if self.clamp_gate else gate
-        return x * gate
+class gMLP(hk.Module):
+    def __init__(
+        self,
+        *,
+        dim,
+        dim_ff,
+        seq_len,
+        name
+    ):
+        super().__init__(name = name)
+        self.norm = LayerNorm(axis = -1)
+        self.proj_in = hk.Linear(dim_ff)
+        self.sgu = SGU(dim = dim_ff, dim_out = dim_ff // 2, seq_len = seq_len)
+        self.proj_out = hk.Linear(dim)
 
-class MLPGpt(nn.Module):
-    num_tokens: int
-    dim: int
-    seq_len: int
-    depth: int
-    heads: int = 1
-    ff_mult: int = 4
-    attn_dim: int = None
-    clamp_gate: bool = True
-
-    def setup(self):
-        self.layers = [gMLP(dim = self.dim, dim_ff = self.dim * self.ff_mult, seq_len = self.seq_len, heads = self.heads, clamp_gate = self.clamp_gate, attn_dim = self.attn_dim) for _ in range(self.depth)]
-
-    @nn.compact
     def __call__(self, x):
-        to_embed = nn.Embed(num_embeddings = self.num_tokens, features = self.dim)
-        x = to_embed(x)
+        x = self.norm(x)
+        x = self.proj_in(x)
+        x = nn.gelu(x)
+        x = self.sgu(x)
+        x = self.proj_out(x)
+        return x
+
+class MaybeExecute(hk.Module):
+    def __init__(
+        self,
+        *,
+        prob_execute,
+        fn
+    ):
+        super().__init__()
+        self.fn = fn
+        self.prob_execute = prob_execute
+
+    def __call__(self, x):
+        key = hk.next_rng_key()
+        p = random.bernoulli(key, p = self.prob_execute)
+        out = self.fn(x) * p + 0 * (1 - p)
+        return out / self.prob_execute
+
+class MLPGpt(hk.Module):
+    def __init__(
+        self,
+        *,
+        num_tokens,
+        dim,
+        seq_len,
+        depth,
+        heads = 1,
+        ff_mult = 4,
+        attn_dim = None,
+        clamp_gate = True,
+        layer_survival_prob = 1.
+    ):
+        super().__init__()
+        self.embed = hk.Embed(num_tokens, dim)
+
+        gmlps = [gMLP(dim = dim, dim_ff = dim * ff_mult, seq_len = seq_len, name = f'gmlp{i}') for i in range(depth)]
+        self.layers = [MaybeExecute(prob_execute = layer_survival_prob, fn = gmlp) for gmlp in gmlps]
+
+        self.to_logits = hk.Sequential([
+            LayerNorm(axis = -1),
+            hk.Linear(num_tokens)
+        ])
+
+    def __call__(self, x):
+        x = self.embed(x)
 
         for layer in self.layers:
             x = layer(x) + x
 
-        x = nn.LayerNorm()(x)
-        x = nn.Dense(features = self.num_tokens)(x)
-        return x
+        return self.to_logits(x)

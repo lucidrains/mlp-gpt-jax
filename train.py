@@ -6,11 +6,12 @@ import numpy as np
 from torch.utils.data import DataLoader, Dataset
 
 import jax
-import flax.linen as nn
+from jax import nn
 from jax import value_and_grad, vmap, jit, random
 from optax import adam, clip_by_global_norm, chain, apply_updates, apply_every
 
-from mlp_gpt_jax import MLPGpt
+import haiku as hk
+from mlp_gpt_jax.haiku import MLPGpt
 
 # constants
 
@@ -63,20 +64,23 @@ val_loader    = cycle(DataLoader(val_dataset, batch_size = BATCH_SIZE))
 
 # setup model and params
 
-model = MLPGpt(
-    num_tokens = 256,
-    dim = 512,
-    seq_len = SEQ_LEN,
-    depth = 8,
-    attn_dim = 32
-)
+def forward(seq):
+    model = MLPGpt(
+        num_tokens = 256,
+        dim = 512,
+        seq_len = SEQ_LEN,
+        depth = 8,
+        layer_survival_prob = 0.95
+    )
+    return model(seq)
 
 key = random.PRNGKey(0)
-params = model.init(key, train_dataset[0][:-1])
+init, apply = hk.transform(forward)
+params = init(key, train_dataset[0][:-1])
 
 # loss function
 
-batch_model_apply = jit(vmap(model.apply, in_axes = (None, 0), out_axes = 0))
+batch_model_apply = jit(vmap(apply, in_axes = (None, None, 0), out_axes = 0))
 
 def cross_entropy(logits, targets, axis = -1):
     logprobs = nn.log_softmax(logits, axis = axis)
@@ -85,9 +89,9 @@ def cross_entropy(logits, targets, axis = -1):
     return ce
 
 @value_and_grad
-def loss_fn(params, data):
+def loss_fn(params, key, data):
     inp, labels = data[:, :-1], data[:, 1:]
-    logits = batch_model_apply(params, inp)
+    logits = batch_model_apply(params, key, inp)
     return cross_entropy(logits, labels, axis = -1)
 
 # optimizer
@@ -104,7 +108,7 @@ optim_state = optim.init(params)
 
 for i in tqdm.tqdm(range(NUM_BATCHES), mininterval=10., desc='training'):
     data = next(train_loader).numpy()
-    loss, grads = loss_fn(params, data)
+    loss, grads = loss_fn(params, key, data)
     updates, optim_state = optim.update(grads, optim_state, params)
     params = apply_updates(params, updates)
 

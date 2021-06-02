@@ -13,35 +13,24 @@ $ pip install mlp-gpt-jax
 ## Usage
 
 ```python
-from jax import random, numpy as np
+from jax import random
+from haiku import transform
 from mlp_gpt_jax import MLPGpt
 
-gpt = MLPGpt(
-    num_tokens = 20000,
-    dim = 512,
-    depth = 6,
-    seq_len = 512
-)
+@transform
+def model(seq):
+    return MLPGpt(
+        num_tokens = 20000,
+        dim = 512,
+        depth = 6,
+        seq_len = 1024
+    )(seq)
 
-key    = random.PRNGKey(0)
-seq    = random.randint(key, (512,), 0, 20000)
+key = random.PRNGKey(0)
+seq = random.randint(key, (1024,), 0, 20000)
 
-params = gpt.init(key, seq)
-logits = gpt.apply(params, seq) # (512, 20000)
-```
-
-You can also use the "tiny" attention mentioned in the paper, by setting the `attn_dim` keyword argument. 64 is recommended if you choose to add the tiny attention.
-
-```python
-from mlp_gpt_jax import MLPGpt
-
-gpt = MLPGpt(
-    num_tokens = 20000,
-    dim = 512,
-    depth = 6,
-    seq_len = 512,
-    attn_dim = 64          # one-headed attention of dimension 64, per paper
-)
+params = model.init(key, seq)
+logits = model.apply(params, key, seq) # (1024, 20000)
 ```
 
 ## Citations
