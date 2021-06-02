@@ -8,9 +8,13 @@ import jax.numpy as np
 import haiku as hk
 from einops import rearrange
 
+# constants
+
+EPS = 1e-3
+
 # helpers
 
-LayerNorm = partial(hk.LayerNorm, create_scale = True, create_offset = True)
+LayerNorm = partial(hk.LayerNorm, create_scale = True, create_offset = True, axis = -1)
 
 # classes
 
@@ -24,7 +28,7 @@ class SGU(hk.Module):
     ):
         super().__init__()
         self.seq_len = seq_len
-        self.norm = LayerNorm(axis = -1)
+        self.norm = LayerNorm()
         self.proj_out = hk.Linear(dim_out)
 
     def __call__(self, x):
@@ -33,7 +37,9 @@ class SGU(hk.Module):
 
         gate = self.norm(gate)
 
-        weights = hk.get_parameter('spatial_weights', shape = (n, n), init = np.zeros)
+        init_eps = hk.initializers.Constant(EPS / n)
+
+        weights = hk.get_parameter('spatial_weights', shape = (n, n), init = init_eps)
         biases = hk.get_parameter('spatial_biases', shape = (n,), init = np.ones)
 
         mask = np.tril(np.ones((n, n)))
@@ -55,7 +61,7 @@ class gMLP(hk.Module):
         name
     ):
         super().__init__(name = name)
-        self.norm = LayerNorm(axis = -1)
+        self.norm = LayerNorm()
         self.proj_in = hk.Linear(dim_ff)
         self.sgu = SGU(dim = dim_ff, dim_out = dim_ff // 2, seq_len = seq_len)
         self.proj_out = hk.Linear(dim)
@@ -106,7 +112,7 @@ class MLPGpt(hk.Module):
         self.layers = [MaybeExecute(prob_execute = layer_survival_prob, fn = gmlp) for gmlp in gmlps]
 
         self.to_logits = hk.Sequential([
-            LayerNorm(axis = -1),
+            LayerNorm(),
             hk.Linear(num_tokens)
         ])
 

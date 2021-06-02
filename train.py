@@ -64,23 +64,22 @@ val_loader    = cycle(DataLoader(val_dataset, batch_size = BATCH_SIZE))
 
 # setup model and params
 
-def forward(seq):
-    model = MLPGpt(
+@hk.transform
+def model(seq):
+    return MLPGpt(
         num_tokens = 256,
         dim = 512,
         seq_len = SEQ_LEN,
         depth = 8,
         layer_survival_prob = 0.95
-    )
-    return model(seq)
+    )(seq)
 
 key = random.PRNGKey(0)
-init, apply = hk.transform(forward)
-params = init(key, train_dataset[0][:-1])
+params = model.init(key, train_dataset[0][:-1])
 
 # loss function
 
-batch_model_apply = jit(vmap(apply, in_axes = (None, None, 0), out_axes = 0))
+batch_model_apply = jit(vmap(model.apply, in_axes = (None, None, 0), out_axes = 0))
 
 def cross_entropy(logits, targets, axis = -1):
     logprobs = nn.log_softmax(logits, axis = axis)
