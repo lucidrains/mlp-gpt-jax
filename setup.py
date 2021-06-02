@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 setup(
     name="mlp-gpt-jax",
     packages=find_packages(),
-    version="0.0.9",
+    version="0.0.10",
     license="MIT",
     description="MLP GPT - Jax",
     author="Phil Wang",

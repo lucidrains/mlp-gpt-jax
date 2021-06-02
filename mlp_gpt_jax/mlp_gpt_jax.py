@@ -31,6 +31,8 @@ class SGU(hk.Module):
         n = self.seq_len
         x, gate = np.split(x, 2, axis = -1)
 
+        gate = self.norm(gate)
+
         weights = hk.get_parameter('spatial_weights', shape = (n, n), init = np.zeros)
         biases = hk.get_parameter('spatial_biases', shape = (n,), init = np.ones)
 
