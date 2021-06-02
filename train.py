@@ -10,8 +10,8 @@ from jax import nn
 from jax import value_and_grad, vmap, jit, random
 from optax import adam, clip_by_global_norm, chain, apply_updates, apply_every
 
-import haiku as hk
-from mlp_gpt_jax import MLPGpt, TransformedMLPGpt
+from haiku import PRNGSequence
+from mlp_gpt_jax import TransformedMLPGpt
 
 # constants
 
@@ -73,8 +73,8 @@ model = TransformedMLPGpt(
     layer_survival_prob = 0.95
 )
 
-key = random.PRNGKey(0)
-params = model.init(key, train_dataset[0][:-1])
+rng = PRNGSequence(42)
+params = model.init(next(rng), train_dataset[0][:-1])
 
 # loss function
 
@@ -106,7 +106,7 @@ optim_state = optim.init(params)
 
 for i in tqdm.tqdm(range(NUM_BATCHES), mininterval=10., desc='training'):
     data = next(train_loader).numpy()
-    loss, grads = loss_fn(params, key, data)
+    loss, grads = loss_fn(params, next(rng), data)
     updates, optim_state = optim.update(grads, optim_state, params)
     params = apply_updates(params, updates)
 

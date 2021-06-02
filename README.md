@@ -14,7 +14,7 @@ $ pip install mlp-gpt-jax
 
 ```python
 from jax import random
-from haiku import transform
+from haiku import PRNGSequence
 from mlp_gpt_jax import TransformedMLPGpt
 
 model = TransformedMLPGpt(
@@ -24,18 +24,18 @@ model = TransformedMLPGpt(
     seq_len = 1024
 )
 
-key = random.PRNGKey(0)
-seq = random.randint(key, (1024,), 0, 20000)
+rng = PRNGSequence(0)
+seq = random.randint(next(rng), (1024,), 0, 20000)
 
-params = model.init(key, seq)
-logits = model.apply(params, key, seq) # (1024, 20000)
+params = model.init(next(rng), seq)
+logits = model.apply(params, next(rng), seq) # (1024, 20000)
 ```
 
 To use the tiny attention (also made autoregressive with a causal mask), just set the `attn_dim` to the head dimension you'd like to use. `64` was recommended in the paper
 
 ```python
 from jax import random
-from haiku import transform
+from haiku import PRNGSequence
 from mlp_gpt_jax import TransformedMLPGpt
 
 model = TransformedMLPGpt(
@@ -46,11 +46,11 @@ model = TransformedMLPGpt(
     attn_dim = 64     # set this to 64
 )
 
-key = random.PRNGKey(0)
-seq = random.randint(key, (1024,), 0, 20000)
+rng = PRNGSequence(0)
+seq = random.randint(next(rng), (1024,), 0, 20000)
 
-params = model.init(key, seq)
-logits = model.apply(params, key, seq) # (1024, 20000)
+params = model.init(next(rng), seq)
+logits = model.apply(params, next(rng), seq) # (1024, 20000)
 ```
 
 ## Citations
