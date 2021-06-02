@@ -33,6 +33,30 @@ params = model.init(key, seq)
 logits = model.apply(params, key, seq) # (1024, 20000)
 ```
 
+To use the tiny attention (also made autoregressive with a causal mask), just set the `attn_dim` to the head dimension you'd like to use. `64` was recommended in the paper
+
+```python
+from jax import random
+from haiku import transform
+from mlp_gpt_jax import MLPGpt
+
+@transform
+def model(seq):
+    return MLPGpt(
+        num_tokens = 20000,
+        dim = 512,
+        depth = 6,
+        seq_len = 1024,
+        attn_dim = 64     # set this to 64
+    )(seq)
+
+key = random.PRNGKey(0)
+seq = random.randint(key, (1024,), 0, 20000)
+
+params = model.init(key, seq)
+logits = model.apply(params, key, seq) # (1024, 20000)
+```
+
 ## Citations
 
 ```bibtex

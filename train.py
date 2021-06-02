@@ -71,6 +71,7 @@ def model(seq):
         dim = 512,
         seq_len = SEQ_LEN,
         depth = 8,
+        attn_dim = 32,
         layer_survival_prob = 0.95
     )(seq)
 
