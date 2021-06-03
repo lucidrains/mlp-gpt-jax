@@ -6,6 +6,7 @@ from jax import nn
 import jax.numpy as np
 
 import haiku as hk
+from haiku import initializers
 from einops import rearrange
 
 # constants
@@ -67,7 +68,8 @@ class SGU(hk.Module):
 
         gate = self.norm(gate)
 
-        init_eps = hk.initializers.Constant(EPS / n)
+        init_scale = EPS / n
+        init_eps = initializers.RandomUniform(minval = -init_scale, maxval = init_scale)
 
         weights = hk.get_parameter('spatial_weights', shape = (n, n), init = init_eps)
         biases = hk.get_parameter('spatial_biases', shape = (n, 1), init = np.ones)
@@ -76,10 +78,10 @@ class SGU(hk.Module):
         weights = weights * mask
 
         gate = np.einsum('n d, m n -> m d', gate, weights)
-        gate = gate + biases
+        gate += biases
 
         if exists(gate_res):
-            gate = gate + gate_res
+            gate += gate_res
 
         x = x * gate
         return self.proj_out(x)
@@ -157,7 +159,7 @@ class MLPGpt(hk.Module):
         x = self.embed(x)
 
         for layer in self.layers:
-            x = layer(x) + x
+            x += layer(x)
 
         return self.to_logits(x)
 
