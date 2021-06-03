@@ -7,7 +7,7 @@ A GPT, made only of MLPs, in Jax. The specific MLP to be used are <a href="https
 ## Install
 
 ```bash
-$ python setup.py install --user
+$ pip install mlp-gpt-jax
 ```
 
 ## Usage
