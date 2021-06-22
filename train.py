@@ -11,7 +11,9 @@ from jax import value_and_grad, vmap, jit, random
 from optax import adam, clip_by_global_norm, chain, apply_updates, apply_every
 
 from haiku import PRNGSequence
+
 from mlp_gpt_jax import TransformedMLPGpt
+from mlp_gpt_jax.utils import sample, cross_entropy
 
 # constants
 
@@ -21,8 +23,7 @@ GRADIENT_ACCUMULATE_EVERY = 4
 LEARNING_RATE = 2e-4
 MAX_GRAD_NORM = 0.5
 VALIDATE_EVERY  = 100
-GENERATE_EVERY  = 500
-GENERATE_LENGTH = 768
+SAMPLE_EVERY  = 500
 SEQ_LEN = 768
 
 # helpers
@@ -64,27 +65,23 @@ val_loader    = cycle(DataLoader(val_dataset, batch_size = BATCH_SIZE))
 
 # setup model and params
 
-model = TransformedMLPGpt(
+model_kwargs = dict(
     num_tokens = 256,
     dim = 512,
     seq_len = SEQ_LEN,
     depth = 8,
     attn_dim = 32,
-    layer_survival_prob = 0.95
 )
 
+train_model = TransformedMLPGpt(**model_kwargs, layer_survival_prob = 0.95)
+eval_model = TransformedMLPGpt(**model_kwargs)
+
 rng = PRNGSequence(42)
-params = model.init(next(rng), train_dataset[0][:-1])
+params = train_model.init(next(rng), train_dataset[0][:-1])
 
 # loss function
 
-batch_model_apply = jit(vmap(model.apply, in_axes = (None, None, 0), out_axes = 0))
-
-def cross_entropy(logits, targets, axis = -1):
-    logprobs = nn.log_softmax(logits, axis = axis)
-    nll = np.take_along_axis(logprobs, np.expand_dims(targets, axis = axis), axis = axis)
-    ce = -np.mean(nll)
-    return ce
+batch_model_apply = jit(vmap(train_model.apply, in_axes = (None, None, 0), out_axes = 0))
 
 @value_and_grad
 def loss_fn(params, key, data):
@@ -112,3 +109,13 @@ for i in tqdm.tqdm(range(NUM_BATCHES), mininterval=10., desc='training'):
 
     if i % GRADIENT_ACCUMULATE_EVERY == 0:
         print(f'loss: {loss.item()}')
+
+    if i % SAMPLE_EVERY == 0:
+        valid_data = next(val_loader).numpy()
+        prime = valid_data[0][:100]
+        prime_str = decode_tokens(prime)
+        print(prime_str, "\n", "*" * 40)
+
+        sampled = sample(rng, jit(eval_model.apply), params, prime, SEQ_LEN, top_k = 25)
+        sampled_str = decode_tokens(sampled[100:])
+        print(sampled_str)
