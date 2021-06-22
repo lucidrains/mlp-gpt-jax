@@ -1,7 +1,15 @@
-import haiku as hk
+from jax import nn
 from jax import random
 from jax.lax import top_k
 import jax.numpy as np
+
+# helper functions
+
+def exists(val):
+    return val is not None
+
+def log(t, eps = 1e-20):
+    return np.log(t + eps)
 
 # loss functions
 
@@ -14,13 +22,13 @@ def cross_entropy(logits, targets, axis = -1):
 # sampling functions
 
 def select_top_k(tensor, k):
-    val, _ = top_k(tensor, k)
-    thres = val.min()
-    return np.where(tensor > thres, tensor, 0.)
+    values, _ = top_k(tensor, k)
+    mask = tensor > values.min()
+    return mask, np.where(mask, tensor, 0.)
 
 def gumbel_noise(rng, shape):
     noise = random.uniform(rng, shape = shape, minval = 0., maxval = 1.)
-    return -np.log(-np.log(noise))
+    return -log(-log(noise))
 
 def sample(rng, fn, params, prime, length, top_k = None):
     start_pos = prime.shape[-1]
@@ -31,11 +39,15 @@ def sample(rng, fn, params, prime, length, top_k = None):
         logits = fn(params, next(rng), seq)
         logits = logits[curr_pos - 1]
 
-        if top_k is not None:
-            logits = select_top_k(logits, top_k)
+        noise = gumbel_noise(next(rng), logits.shape)
 
-        logits += gumbel_noise(next(rng), logits.shape)
+        if exists(top_k):
+            mask, logits = select_top_k(logits, top_k)
+            noise *= mask
+
+        logits += noise
         sampled_ind = np.argmax(logits, axis = -1)
+
         one_hot = one_hots[curr_pos]
         seq += one_hot * sampled_ind
 
