@@ -6,14 +6,13 @@ import numpy as np
 from torch.utils.data import DataLoader, Dataset
 
 import jax
-from jax import nn
-from jax import value_and_grad, vmap, jit, random
+from jax import nn, random, jit
 from optax import adam, clip_by_global_norm, chain, apply_updates, apply_every
 
 from haiku import PRNGSequence
 
 from mlp_gpt_jax import TransformedMLPGpt
-from mlp_gpt_jax.utils import sample, cross_entropy
+from mlp_gpt_jax.utils import sample, get_train_loss_fn
 
 # constants
 
@@ -79,15 +78,7 @@ eval_model = TransformedMLPGpt(**model_kwargs)
 rng = PRNGSequence(42)
 params = train_model.init(next(rng), train_dataset[0][:-1])
 
-# loss function
-
-batch_model_apply = jit(vmap(train_model.apply, in_axes = (None, None, 0), out_axes = 0))
-
-@value_and_grad
-def loss_fn(params, key, data):
-    inp, labels = data[:, :-1], data[:, 1:]
-    logits = batch_model_apply(params, key, inp)
-    return cross_entropy(logits, labels, axis = -1)
+loss_fn = get_train_loss_fn(train_model)
 
 # optimizer
 
